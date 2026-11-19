@@ -289,10 +289,36 @@ describe('provider-routed retry policy', () => {
     })
   })
 
-  it('leaves partial failed chunks on their step without committing a message or tool side effect', async () => {
+  it.each([
+    ['INVALID_TOOL_INPUT_JSON', 'INVALID_TOOL_INPUT_JSON'],
+    ['SERVER', 'INVALID_TOOL_INPUT_JSON'],
+  ] as const)('does not regenerate invalid tool JSON after a %s retry', async (firstCode, lastCode) => {
     vi.useFakeTimers()
     const adapter = new ScriptedAdapter([
-      partialToolFailure(new LlmError('stream interrupted', 'TRANSPORT')),
+      new LlmError('first failure', firstCode),
+      new LlmError('invalid JSON', lastCode),
+    ])
+    ;({ ctx: context } = await harness(adapter))
+    const agent = await context.agentLoop.create(brandString<SessionId>('retry-invalid-tool-json'), { provider: 'mock', model: 'mock' })
+    const scheduled = waitForRetry(context, agent, 1)
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    expect((await scheduled).data.failure.code).toBe(firstCode)
+
+    const idle = waitForIdle(context, agent)
+    await vi.runAllTimersAsync()
+    await idle
+
+    expect(adapter.requests).toHaveLength(2)
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'llm/retry')).toHaveLength(1)
+    expect(agent.session.snapshotEvents().find(event => event.type === 'turn/end')).toMatchObject({
+      data: { reason: { kind: 'error', error: { code: lastCode } } },
+    })
+  })
+
+  it.each(['TRANSPORT', 'INVALID_TOOL_INPUT_JSON'] as const)('does not commit a message or tool call after %s', async (code) => {
+    vi.useFakeTimers()
+    const adapter = new ScriptedAdapter([
+      partialToolFailure(new LlmError('failed tool response', code)),
       textResponse('recovered'),
     ])
     ;({ ctx: context } = await harness(adapter))

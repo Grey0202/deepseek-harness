@@ -47,7 +47,7 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-llm-retry'
 ```
 
-省略 `retryPolicy` 时使用 normal mode：对 `EMPTY_RESPONSE`、`RATE_LIMIT`、`SERVER`、`TIMEOUT` 与 `TRANSPORT` 最多重试五次，退避从 500 毫秒到 10 秒、带 10% 抖动。normal mode 可以更改其有界预算、合格 code 与退避；always mode 先询问下游恢复，然后无尝试上限地重试每个模型请求失败，只在成功、取消或插件释放时停止。
+省略 `retryPolicy` 时使用 normal mode：对 `EMPTY_RESPONSE`、`RATE_LIMIT`、`SERVER`、`TIMEOUT` 与 `TRANSPORT` 最多重试五次，退避从 500 毫秒到 10 秒、带 10% 抖动。`INVALID_TOOL_INPUT_JSON` 默认也可重试，但仅限该请求在当前策略下的第一次重试，并计入同一预算。显式配置 `retryableCodes` 时，可用 `INVALID_TOOL_INPUT_JSON` 单独选择这类失败；已有的 `MALFORMED_RESPONSE` 选项仍涵盖这类失败。normal mode 可以更改其有界预算、合格 code 与退避；always mode 先询问下游恢复，然后无尝试上限地重试每个模型请求失败，只在成功、取消或插件释放时停止。
 
 ### 你可以观察到什么
 

@@ -210,7 +210,8 @@ export async function apply(ctx: Context, config: Config = {}, internals: RetryI
       if (downstream.type === 'decision' && downstream.decision?.kind === 'retry') {
         return downstream.decision
       }
-    } else if (!policy.retryableCodes.includes(failure.code)) {
+    } else if (!policy.retryableCodes.includes(failure.code)
+      && !(failure.code === 'INVALID_TOOL_INPUT_JSON' && policy.retryableCodes.includes('MALFORMED_RESPONSE'))) {
       return next()
     }
 
@@ -218,7 +219,11 @@ export async function apply(ctx: Context, config: Config = {}, internals: RetryI
     const retryState = llmRetryProjectionHandle.stateOf(agent.session)
     const previous = retryState[retryStateKey(provider, policyKey)]
     const previousRetry = previous?.retry ?? 0
-    if (policy.mode === 'normal' && previousRetry >= policy.maxRetries) return next()
+    if (policy.mode === 'normal') {
+      if (previousRetry >= policy.maxRetries) return next()
+      // Regeneration for invalid JSON is eligible only as the first retry.
+      if (failure.code === 'INVALID_TOOL_INPUT_JSON' && previousRetry > 0) return next()
+    }
     const retry = previousRetry + 1
     const retryId = previous?.retryId ?? brandString<RetryId>(randomUUID())
     let delayMs: number

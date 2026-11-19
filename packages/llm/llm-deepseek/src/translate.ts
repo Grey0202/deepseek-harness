@@ -167,7 +167,10 @@ export async function* translate(events: AsyncIterable<Record<string, unknown>>,
         for (const { content } of blocks.values()) {
           if (content.type !== 'tool-call') continue
           let parsed: unknown
-          try { parsed = JSON.parse(content.arguments) } catch (_invalidProviderToolJson) { return malformed('tool input is invalid JSON') }
+          try { parsed = JSON.parse(content.arguments) } catch (_invalidProviderToolJson) {
+            yield { type: 'usage', usage }
+            throw new LlmError('DeepSeek Messages stream: tool input is invalid JSON', 'INVALID_TOOL_INPUT_JSON')
+          }
           object(parsed)
         }
       }
